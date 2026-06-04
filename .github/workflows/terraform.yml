@@ -1,0 +1,147 @@
+# GitHub Actions pipeline: validates, security-scans, plans, and applies the
+# Terraform that builds the EKS + Kafka + monitoring stack.
+# Security best practices baked in:
+#   * OIDC federation to AWS (NO long-lived AWS keys stored in GitHub).
+#   * Least-privilege job permissions.
+#   * tfsec + Checkov static security scanning before any apply.
+#   * Apply only runs on pushes to main (not on PRs).
+name: terraform-kafka-eks
+
+# Run on PRs (plan only) and on pushes to main (plan + apply).
+on:
+  pull_request:
+    paths: ["terraform/**", ".github/workflows/**"]
+  push:
+    branches: ["main"]
+    paths: ["terraform/**", ".github/workflows/**"]
+
+# Default token has read-only repo scope; we add id-token for OIDC.
+permissions:
+  contents: read        # checkout the code
+  id-token: write       # request the OIDC JWT used to assume the AWS role
+  pull-requests: write  # post the plan as a PR comment
+
+# Cancel superseded runs on the same branch to save minutes.
+concurrency:
+  group: tf-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_VERSION: "1.9.5"           # pin Terraform for reproducible runs
+  AWS_REGION: "us-east-1"       # region the stack lives in
+  WORKING_DIR: "terraform"      # where the root module is
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Job 1: static analysis + plan. Runs on every PR and push.
+  # -----------------------------------------------------------------------
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      # Pull the repository contents into the runner.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install the pinned Terraform CLI.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Assume an AWS IAM role via OIDC — no stored secrets.
+      # The role ARN is stored as a GitHub secret (not the keys themselves).
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}  # arn of CI role
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Fail fast if any file isn't canonically formatted.
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.WORKING_DIR }}
+
+      # Initialize providers + backend (reads remote S3 state).
+      - name: Terraform init
+        run: terraform init -input=false
+        working-directory: ${{ env.WORKING_DIR }}
+
+      # Validate the configuration is internally consistent.
+      - name: Terraform validate
+        run: terraform validate
+        working-directory: ${{ env.WORKING_DIR }}
+
+      # Static security scan #1: tfsec catches insecure IaC patterns.
+      - name: tfsec security scan
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: ${{ env.WORKING_DIR }}
+          soft_fail: false   # block the pipeline on findings
+
+      # Static security scan #2: Checkov, a second opinion on misconfigs.
+      - name: Checkov security scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ${{ env.WORKING_DIR }}
+          framework: terraform
+          quiet: true
+
+      # Produce the plan; grafana password comes from a CI secret.
+      - name: Terraform plan
+        run: terraform plan -input=false -no-color -out=tfplan
+        working-directory: ${{ env.WORKING_DIR }}
+        env:
+          TF_VAR_grafana_admin_password: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+
+      # Save the plan so the apply job can consume the exact same artifact.
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.WORKING_DIR }}/tfplan
+          retention-days: 1
+
+  # -----------------------------------------------------------------------
+  # Job 2: apply. Only on push to main, and only after plan succeeds.
+  # Uses a protected GitHub Environment so a human can require approval.
+  # -----------------------------------------------------------------------
+  apply:
+    needs: plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production   # configure required reviewers in repo settings
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        run: terraform init -input=false
+        working-directory: ${{ env.WORKING_DIR }}
+
+      # Re-download the exact plan the reviewers approved.
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.WORKING_DIR }}
+
+      # Apply the saved plan — no surprises, exactly what was reviewed.
+      - name: Terraform apply
+        run: terraform apply -input=false -auto-approve tfplan
+        working-directory: ${{ env.WORKING_DIR }}
+        env:
+          TF_VAR_grafana_admin_password: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}

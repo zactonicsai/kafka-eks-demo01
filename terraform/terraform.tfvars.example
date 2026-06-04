@@ -1,0 +1,13 @@
+region = "us-east-1"
+name   = "demo-kafka"
+
+# Do NOT put the real password here. Prefer:
+#   export TF_VAR_grafana_admin_password="..."
+# or a CI secret. This line is only a placeholder.
+grafana_admin_password = "change-me-via-env-or-secret"
+
+tags = {
+  Project   = "kafka-eks-demo"
+  ManagedBy = "terraform"
+  Owner     = "platform-team"
+}

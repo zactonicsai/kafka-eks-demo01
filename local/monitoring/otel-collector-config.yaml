@@ -1,0 +1,29 @@
+# OpenTelemetry Collector config.
+# Pipeline: clients --OTLP/gRPC--> collector --Prometheus--> Prometheus scrape.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317   # producer/consumer push metrics + traces here
+
+processors:
+  batch: {}                       # batch telemetry for efficiency
+
+exporters:
+  # Re-expose received metrics in Prometheus format on :8889/metrics.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+  # Print traces to collector logs (handy for local debugging).
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

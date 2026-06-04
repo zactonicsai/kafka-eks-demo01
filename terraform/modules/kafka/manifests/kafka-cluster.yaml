@@ -1,0 +1,56 @@
+# Strimzi Kafka custom resource: deploys brokers in KRaft mode with security
+# + metrics enabled. Values in ${...} are injected by Terraform templatefile.
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+  annotations:
+    strimzi.io/node-pools: enabled   # use KafkaNodePool (no ZooKeeper, KRaft)
+    strimzi.io/kraft: enabled
+spec:
+  kafka:
+    version: ${kafka_version}
+    # ---- Listeners: every listener encrypts in transit (TLS) ----
+    listeners:
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true                    # encrypt traffic with TLS
+        authentication:
+          type: scram-sha-512        # password auth over the encrypted channel
+    config:
+      # Durability defaults suitable for a 3-broker cluster.
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      default.replication.factor: 3
+      min.insync.replicas: 2          # ack only when 2 replicas have the write
+    # ---- Expose JMX metrics in Prometheus format ----
+    metricsConfig:
+      type: jmxPrometheusExporter
+      valueFrom:
+        configMapKeyRef:
+          name: kafka-metrics
+          key: kafka-metrics-config.yml
+  # KafkaNodePool defines the actual broker pods (KRaft combined role).
+  entityOperator:
+    topicOperator: {}   # lets us declare topics as KafkaTopic CRs
+    userOperator: {}    # lets us declare users/passwords as KafkaUser CRs
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: ${name}-pool
+  namespace: ${namespace}
+  labels:
+    strimzi.io/cluster: ${name}
+spec:
+  replicas: ${replicas}
+  roles:
+    - controller   # KRaft controller
+    - broker       # and broker on the same nodes (combined mode)
+  storage:
+    type: persistent-claim
+    size: 20Gi
+    deleteClaim: false   # keep data if the pool is deleted (safety)

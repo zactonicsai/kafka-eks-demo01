@@ -1,0 +1,32 @@
+# ConfigMap consumed by the JMX Prometheus exporter inside each broker.
+# It translates Kafka's JMX MBeans into Prometheus metrics.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-metrics
+  namespace: ${namespace}
+  labels:
+    app: strimzi
+data:
+  kafka-metrics-config.yml: |
+    # Catch-all: turn key broker JMX beans into Prometheus time series.
+    lowercaseOutputName: true
+    rules:
+      # Messages-in / bytes-in/out per topic — the core "message tracking" metrics.
+      - pattern: kafka.server<type=(.+), name=(.+)PerSec, topic=(.+)><>Count
+        name: kafka_server_$1_$2_total
+        type: COUNTER
+        labels:
+          topic: "$3"
+      # Broker-wide throughput (no topic label).
+      - pattern: kafka.server<type=(.+), name=(.+)PerSec><>Count
+        name: kafka_server_$1_$2_total
+        type: COUNTER
+      # Under-replicated partitions — health signal.
+      - pattern: kafka.server<type=ReplicaManager, name=(.+)><>Value
+        name: kafka_server_replicamanager_$1
+        type: GAUGE
+      # Consumer group lag-ish / request metrics.
+      - pattern: kafka.network<type=(.+), name=(.+)><>Count
+        name: kafka_network_$1_$2_total
+        type: COUNTER
