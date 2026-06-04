@@ -14,6 +14,8 @@ Every pipeline step and every Kafka/monitoring config line is commented.
 
 ---
 
+curl -fSL -o kafka/jmx_prometheus_javaagent.jar   https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/1.0.1/jmx_prometheus_javaagent-1.0.1.jar
+
 ## Repository layout
 
 ```
