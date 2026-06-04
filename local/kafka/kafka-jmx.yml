@@ -1,6 +1,6 @@
-# JMX -> Prometheus mapping for the local broker. Mirrors the EKS rules so
-# dashboards behave the same locally and in the cloud.
-hostPort: kafka:5555     # where the broker exposes JMX (see compose JMX_PORT)
+# JMX -> Prometheus mapping, loaded by the jmx_prometheus_javaagent running
+# INSIDE the Kafka broker (see KAFKA_OPTS in docker-compose.yml). The agent
+# reads the broker's own JMX beans in-process, so no host/port is needed.
 lowercaseOutputName: true
 rules:
   # Per-topic messages-in / bytes — used to "track messages" on the dashboard.
@@ -9,11 +9,15 @@ rules:
     type: COUNTER
     labels:
       topic: "$3"
-  # Broker-wide throughput counters.
+  # Broker-wide throughput counters (no topic label).
   - pattern: kafka.server<type=(.+), name=(.+)PerSec><>Count
     name: kafka_server_$1_$2_total
     type: COUNTER
-  # Replica health.
+  # Replica health (e.g. under-replicated partitions).
   - pattern: kafka.server<type=ReplicaManager, name=(.+)><>Value
     name: kafka_server_replicamanager_$1
     type: GAUGE
+  # Request/network metrics.
+  - pattern: kafka.network<type=(.+), name=(.+)><>Count
+    name: kafka_network_$1_$2_total
+    type: COUNTER

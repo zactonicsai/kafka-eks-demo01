@@ -18,3 +18,6 @@ __pycache__/
 .env
 *.pem
 *.key
+
+# Downloaded JMX agent jar (fetched by local/kafka/setup.sh)
+local/kafka/jmx_prometheus_javaagent.jar

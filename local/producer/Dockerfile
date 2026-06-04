@@ -1,5 +1,5 @@
 # Small, secure Python base.
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Run as a non-root user (security best practice).
 RUN useradd --create-home appuser

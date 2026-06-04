@@ -1,55 +1,56 @@
-# Local dev stack: a single-broker Kafka (KRaft), a Python producer + consumer,
-# a JMX exporter, Prometheus, Grafana, and an OpenTelemetry Collector.
-# This mirrors the cloud setup so you can develop/observe locally.
+# Local dev stack: a single-broker Kafka (KRaft) using the OFFICIAL Apache
+# Kafka image, a Python producer + consumer, Prometheus, Grafana, and an
+# OpenTelemetry Collector. Mirrors the cloud setup for local development.
+#
+# NOTE on the Kafka image: we use the official `apache/kafka` image. Bitnami's
+# public images were moved to a "legacy" (unmaintained) repo in Aug 2025, so
+# they are no longer a safe choice. The official image uses KAFKA_* env vars
+# (not KAFKA_CFG_*) and we attach the JMX Prometheus Java agent to expose
+# broker metrics on :9404 (no separate exporter container needed).
 services:
 
   # ---- Kafka broker (KRaft mode, no ZooKeeper) ---------------------------
   kafka:
-    image: bitnami/kafka:3.8
+    image: apache/kafka:4.3.0           # official Apache Kafka, latest stable
     container_name: kafka
     ports:
-      - "9092:9092"   # client access from your host
+      - "9092:9092"                     # client access from your host
+      - "9404:9404"                     # JMX-exporter Prometheus metrics
     environment:
-      # KRaft: this node is both controller and broker.
-      KAFKA_CFG_NODE_ID: "1"
-      KAFKA_CFG_PROCESS_ROLES: "controller,broker"
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      # KRaft: this single node is both controller and broker.
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "controller,broker"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
       # Listeners: PLAINTEXT for local simplicity (cloud uses TLS+SCRAM).
-      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
-      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
-      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
-      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
-      # Expose JMX so the exporter can read broker metrics.
-      JMX_PORT: "5555"
-      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=kafka -Dcom.sun.management.jmxremote.rmi.port=5555 -Dcom.sun.management.jmxremote.port=5555"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Single-node durability settings (replication factor must be 1).
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      # Attach the JMX Prometheus Java agent so the broker self-exposes
+      # Prometheus metrics on :9404 using our mapping rules.
+      KAFKA_OPTS: "-javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=9404:/opt/jmx/kafka-jmx.yml"
+    volumes:
+      # The agent jar + rules are downloaded by ./kafka/setup.sh (see README).
+      - ./kafka/jmx_prometheus_javaagent.jar:/opt/jmx/jmx_prometheus_javaagent.jar:ro
+      - ./kafka/kafka-jmx.yml:/opt/jmx/kafka-jmx.yml:ro
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      # The official image ships CLI tools under /opt/kafka/bin.
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 10s
       timeout: 10s
-      retries: 10
-
-  # ---- JMX -> Prometheus exporter sidecar for Kafka ----------------------
-  kafka-exporter:
-    image: bitnami/jmx-exporter:1.0.1
-    container_name: kafka-exporter
-    command:
-      - "5556"                                  # port Prometheus scrapes
-      - "/opt/config/kafka-jmx.yml"             # mapping rules
-    ports:
-      - "5556:5556"
-    volumes:
-      - ./kafka/kafka-jmx.yml:/opt/config/kafka-jmx.yml:ro
-    depends_on:
-      kafka:
-        condition: service_healthy
+      retries: 15
 
   # ---- OpenTelemetry Collector (OTEL) ------------------------------------
   # Receives OTLP traces/metrics from the Python clients and re-exposes
   # metrics in Prometheus format for scraping.
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.110.0
+    image: otel/opentelemetry-collector-contrib:0.153.0   # latest stable
     container_name: otel-collector
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
@@ -60,19 +61,18 @@ services:
 
   # ---- Prometheus --------------------------------------------------------
   prometheus:
-    image: prom/prometheus:v2.54.1
+    image: prom/prometheus:v3.12.0      # latest stable
     container_name: prometheus
     ports:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     depends_on:
-      - kafka-exporter
       - otel-collector
 
   # ---- Grafana -----------------------------------------------------------
   grafana:
-    image: grafana/grafana:11.2.0
+    image: grafana/grafana:13.0.2       # latest stable
     container_name: grafana
     ports:
       - "3000:3000"

@@ -49,6 +49,8 @@ Grafana dashboard updating.
 
 ```bash
 cd local
+# One-time: download the JMX Prometheus agent the Kafka broker loads.
+./kafka/setup.sh
 docker compose up --build
 ```
 
@@ -78,8 +80,26 @@ Tear down with `docker compose down -v`.
 producer ─┐                         ┌─> Prometheus ─> Grafana
           ├─ OTLP/gRPC ─> OTEL Collector (re-exposes /metrics on :8889)
 consumer ─┘
-kafka ─ JMX ─> jmx-exporter (:5556) ─> Prometheus ─> Grafana
+kafka (JMX agent self-exposes metrics on :9404) ─> Prometheus ─> Grafana
 ```
+
+### Pinned component versions (verified current as of June 2026)
+
+All images are pinned to explicit versions for reproducible builds.
+
+| Component | Version | Notes |
+|-----------|---------|-------|
+| Kafka (local) | `apache/kafka:4.3.0` | Official Apache image. **Not Bitnami** — Bitnami's public images moved to an unmaintained "legacy" repo in Aug 2025, so they are no longer a safe default. |
+| Kafka (cloud) | Strimzi `0.51.0`, Kafka `4.2.0` | Strimzi 0.51 supports Kafka 4.1/4.2 and the `v1beta2` API. |
+| Prometheus | `v3.12.0` | Latest stable. |
+| Grafana | `13.0.2` | Latest stable. |
+| OTEL Collector | `0.153.0` (contrib) | Latest stable. |
+| Python base | `3.14-slim` | Latest stable Python. |
+| confluent-kafka | `2.14.0` | |
+| OpenTelemetry SDK/API | `1.42.1` | |
+| kube-prometheus-stack | `86.1.0` | Helm chart for cloud monitoring. |
+| EKS Kubernetes | `1.33` | Meets Strimzi's ≥1.30 requirement. |
+| JMX Prometheus agent | `1.0.1` | Downloaded by `local/kafka/setup.sh`. |
 
 ---
 
@@ -180,4 +200,3 @@ Local: `cd local && docker compose down -v`
 Cloud: `cd terraform && terraform destroy`
 (then optionally remove the bootstrap S3 bucket, DynamoDB table, OIDC provider,
 and IAM role.)
-"# kafka-eks-demo01" 

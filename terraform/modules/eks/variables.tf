@@ -6,7 +6,7 @@ variable "name" {
 variable "kubernetes_version" {
   description = "EKS Kubernetes control plane version"
   type        = string
-  default     = "1.30"
+  default     = "1.33"
 }
 
 variable "vpc_id" {

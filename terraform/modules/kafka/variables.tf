@@ -12,7 +12,7 @@ variable "namespace" {
 variable "strimzi_version" {
   description = "Strimzi Kafka Operator Helm chart version"
   type        = string
-  default     = "0.45.0"
+  default     = "0.51.0"
 }
 
 variable "kafka_replicas" {
@@ -22,7 +22,7 @@ variable "kafka_replicas" {
 }
 
 variable "kafka_version" {
-  description = "Kafka version deployed by Strimzi"
+  description = "Kafka version deployed by Strimzi (must be supported by the operator version)"
   type        = string
-  default     = "3.8.0"
+  default     = "4.2.0"
 }

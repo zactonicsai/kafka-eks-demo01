@@ -3,10 +3,10 @@ global:
   scrape_interval: 5s        # scrape every 5s for a lively dashboard
 
 scrape_configs:
-  # 1) Kafka broker metrics via the JMX exporter.
+  # 1) Kafka broker metrics via the in-process JMX Prometheus agent (:9404).
   - job_name: "kafka"
     static_configs:
-      - targets: ["kafka-exporter:5556"]
+      - targets: ["kafka:9404"]
 
   # 2) Application metrics (messages produced/consumed) from the OTEL collector.
   - job_name: "otel-apps"
