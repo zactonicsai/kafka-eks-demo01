@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.11.0"
 
   required_providers {
     aws        = { source = "hashicorp/aws", version = "~> 5.60" }
@@ -8,13 +8,15 @@ terraform {
     tls        = { source = "hashicorp/tls", version = "~> 4.0" }
   }
 
-  # Remote state in S3 with DynamoDB locking (best practice; create these first).
+  # Remote state in S3 with native S3 state locking (Terraform 1.11+).
+  # No DynamoDB table needed — `use_lockfile` makes S3 handle locking via
+  # conditional writes (a small .tflock object next to the state file).
   backend "s3" {
-    bucket         = "REPLACE-ME-tfstate-bucket"
-    key            = "kafka-eks/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "REPLACE-ME-tf-lock"
-    encrypt        = true
+    bucket         = "kafakademo-tfstate-bucket"
+    key          = "kafka-eks/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 

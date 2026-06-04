@@ -35,6 +35,8 @@ module "monitoring" {
 }
 
 # 4) Kafka via Strimzi
+# NOTE: on a fresh cluster, apply the Strimzi operator first so its CRDs exist
+# before the Kafka custom resources are planned. See README "two-phase apply".
 module "kafka" {
   source     = "./modules/kafka"
   name       = var.name
