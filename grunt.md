@@ -25,6 +25,7 @@
 1. [OpenSearch Cluster](#17-opensearch-cluster)
 1. [CI/CD, Testing & Best Practices](#18-cicd-testing--best-practices)
 1. [Troubleshooting & Cheat Sheet](#19-troubleshooting--cheat-sheet)
+1. [Official References & Documentation](#20-official-references--documentation)
 
 -----
 
@@ -76,14 +77,65 @@ tenv tg install 0.67.0
 tenv tg use 0.67.0
 ```
 
-### Verify
+### Windows desktop
+
+You have four good options. **winget** (built into Windows 10/11) is the simplest; **Chocolatey** has the largest ecosystem; **Scoop** is clean and non-admin; **WSL2** gives you a real Linux shell (recommended if you’ll do serious work — most cloud tooling assumes a Unix-like environment).
+
+**Option 1 — winget (Microsoft-native, easiest).** Open PowerShell:
+
+```powershell
+winget install --id HashiCorp.Terraform --exact
+winget install --id Gruntwork.Terragrunt --exact   # if unavailable, see manual install below
+# Supporting CLIs
+winget install --id Amazon.AWSCLI
+winget install --id Microsoft.AzureCLI
+winget install --id Kubernetes.kubectl
+winget install --id Helm.Helm
+winget install --id Git.Git
+# Upgrade everything later:
+winget upgrade --all
+```
+
+**Option 2 — Chocolatey (run PowerShell as Administrator).** Install Chocolatey first if needed, then:
+
+```powershell
+# Install Chocolatey (admin PowerShell)
+Set-ExecutionPolicy Bypass -Scope Process -Force; `
+  [System.Net.ServicePointManager]::SecurityProtocol = 3072; `
+  iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+choco install terraform terragrunt awscli azure-cli kubernetes-cli kubernetes-helm git -y
+choco upgrade terraform terragrunt -y   # update later
+```
+
+**Option 3 — Scoop (no admin rights needed).**
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+irm get.scoop.sh | iex
+scoop install terraform terragrunt awscli azure-cli kubectl helm git
+```
+
+**Option 4 — WSL2 (recommended for heavy use).** This gives you Ubuntu inside Windows; then follow the Linux instructions above (`tenv`, `apt`, etc.). In admin PowerShell:
+
+```powershell
+wsl --install                # installs WSL2 + Ubuntu, then reboot
+# After reboot, open "Ubuntu" from Start, then inside the Linux shell:
+#   curl -fsSL https://raw.githubusercontent.com/tofuutils/tenv/main/install.sh | bash
+```
+
+**Manual install / PATH (any of the above failing, or you want a pinned version).** Download the Windows AMD64 zip from the official downloads page, extract `terraform.exe` to e.g. `C:\terraform`, then add that folder to PATH: *Search → “Edit the system environment variables” → Environment Variables → System variables → Path → Edit → New → `C:\terraform`*. Open a **new** terminal afterward so PATH refreshes.
+
+> **Windows gotchas:** (1) Use a fresh terminal after install so PATH updates. (2) Watch line endings — set `git config --global core.autocrlf input` to avoid CRLF issues in `.tf`/`.sh` files. (3) Package managers can lag a release or two behind the latest Terraform; use manual install or WSL+`tenv` when you need an exact version.
+
+### Verify (all platforms)
 
 ```bash
 terraform version
 terragrunt --version
 ```
 
-### Supporting tools
+### Supporting tools (macOS/Linux)
 
 ```bash
 # CLIs for the clouds you'll use
@@ -92,9 +144,11 @@ brew install awscli azure-cli kubectl helm ansible
 brew install tflint tfsec trivy checkov pre-commit
 ```
 
+> **Ansible on Windows:** Ansible’s control node does not run natively on Windows — install and run it from WSL2 (`pip install ansible` inside Ubuntu). Windows machines can still be *managed* as Ansible targets over WinRM/SSH.
+
 ### VS Code
 
-Install the **HashiCorp Terraform** extension for syntax highlighting, autocomplete, and `terraform fmt` on save.
+Install the **HashiCorp Terraform** extension for syntax highlighting, autocomplete, and `terraform fmt` on save. On Windows, pair it with the **WSL** extension if you went the WSL2 route.
 
 -----
 
@@ -1493,3 +1547,108 @@ helm list -A
 -----
 
 *End of tutorial. Each section is self-contained — copy a block, pin your versions, `terraform init`, and iterate.*
+
+-----
+
+## 20. Official References & Documentation
+
+All links point to official/primary sources. Always treat version numbers in this tutorial as examples and check the relevant docs for the current stable release.
+
+### Terraform & Terragrunt core
+
+- Terraform install (all OS, incl. Windows winget/Chocolatey): <https://developer.hashicorp.com/terraform/install>
+- Terraform downloads (manual binaries): <https://developer.hashicorp.com/terraform/downloads>
+- Terraform language docs: <https://developer.hashicorp.com/terraform/language>
+- Terraform CLI commands: <https://developer.hashicorp.com/terraform/cli/commands>
+- Terraform functions reference: <https://developer.hashicorp.com/terraform/language/functions>
+- Terraform backends (state): <https://developer.hashicorp.com/terraform/language/backend>
+- Terraform native testing: <https://developer.hashicorp.com/terraform/language/tests>
+- Terraform Registry (modules & providers): <https://registry.terraform.io>
+- Terragrunt docs: <https://terragrunt.gruntwork.io/docs/>
+- Terragrunt install: <https://terragrunt.gruntwork.io/docs/getting-started/install/>
+- tenv version manager: <https://github.com/tofuutils/tenv>
+
+### Windows tooling
+
+- winget (Windows Package Manager): <https://learn.microsoft.com/windows/package-manager/winget/>
+- Chocolatey: <https://chocolatey.org/install>
+- Scoop: <https://scoop.sh>
+- WSL2 install: <https://learn.microsoft.com/windows/wsl/install>
+
+### Providers
+
+- AWS provider: <https://registry.terraform.io/providers/hashicorp/aws/latest/docs>
+- AzureRM provider: <https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs>
+- Kubernetes provider: <https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs>
+- Helm provider: <https://registry.terraform.io/providers/hashicorp/helm/latest/docs>
+- Docker provider (kreuzwerker): <https://registry.terraform.io/providers/kreuzwerker/docker/latest/docs>
+
+### Cloud CLIs & auth
+
+- AWS CLI install: <https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html>
+- Azure CLI install: <https://learn.microsoft.com/cli/azure/install-azure-cli>
+- AWS OIDC for GitHub Actions: <https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html>
+
+### Frequently used registry modules
+
+- AWS VPC module: <https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest>
+- AWS EKS module: <https://registry.terraform.io/modules/terraform-aws-modules/eks/aws/latest>
+
+### Kubernetes, Helm & containers
+
+- Kubernetes docs: <https://kubernetes.io/docs/home/>
+- Amazon EKS docs: <https://docs.aws.amazon.com/eks/>
+- Amazon ECS docs: <https://docs.aws.amazon.com/ecs/>
+- Helm docs: <https://helm.sh/docs/>
+- kubectl reference: <https://kubernetes.io/docs/reference/kubectl/>
+
+### Ansible
+
+- Ansible docs: <https://docs.ansible.com/>
+- amazon.aws collection (dynamic inventory): <https://docs.ansible.com/ansible/latest/collections/amazon/aws/>
+- Installing Ansible: <https://docs.ansible.com/ansible/latest/installation_guide/>
+
+### Workloads — Kafka, Zookeeper, NiFi
+
+- Apache Kafka docs: <https://kafka.apache.org/documentation/>
+- KRaft (Kafka without Zookeeper): <https://kafka.apache.org/documentation/#kraft>
+- Apache Zookeeper: <https://zookeeper.apache.org/doc/current/>
+- Apache NiFi docs: <https://nifi.apache.org/docs/>
+- AWS MSK (managed Kafka): <https://docs.aws.amazon.com/msk/>
+- Bitnami Kafka Helm chart: <https://github.com/bitnami/charts/tree/main/bitnami/kafka>
+- Cetic NiFi Helm chart: <https://github.com/cetic/helm-nifi>
+
+### Observability — Prometheus, Grafana, OpenTelemetry
+
+- Prometheus docs: <https://prometheus.io/docs/>
+- Grafana docs: <https://grafana.com/docs/>
+- kube-prometheus-stack chart: <https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack>
+- OpenTelemetry docs: <https://opentelemetry.io/docs/>
+- OpenTelemetry Collector: <https://opentelemetry.io/docs/collector/>
+- OpenTelemetry Helm charts: <https://github.com/open-telemetry/opentelemetry-helm-charts>
+
+### Load balancing, proxies & search
+
+- AWS Elastic Load Balancing: <https://docs.aws.amazon.com/elasticloadbalancing/>
+- AWS Auto Scaling: <https://docs.aws.amazon.com/autoscaling/>
+- Kong Ingress / Helm chart: <https://docs.konghq.com/kubernetes-ingress-controller/>
+- Istio service mesh: <https://istio.io/latest/docs/>
+- Linkerd service mesh: <https://linkerd.io/2/overview/>
+- OpenSearch docs: <https://opensearch.org/docs/latest/>
+- Amazon OpenSearch Service: <https://docs.aws.amazon.com/opensearch-service/>
+- OpenSearch Helm charts: <https://github.com/opensearch-project/helm-charts>
+
+### CI/CD & quality
+
+- GitHub Actions docs: <https://docs.github.com/actions>
+- Terragrunt GitHub Action: <https://github.com/gruntwork-io/terragrunt-action>
+- TFLint: <https://github.com/terraform-linters/tflint>
+- tfsec: <https://github.com/aquasecurity/tfsec>
+- Checkov: <https://www.checkov.io/>
+- pre-commit: <https://pre-commit.com/>
+- pre-commit hooks for Terraform: <https://github.com/antonbabenko/pre-commit-terraform>
+
+### Secrets
+
+- AWS Secrets Manager: <https://docs.aws.amazon.com/secretsmanager/>
+- Azure Key Vault: <https://learn.microsoft.com/azure/key-vault/>
